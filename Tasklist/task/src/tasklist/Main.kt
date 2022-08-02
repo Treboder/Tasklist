@@ -1,38 +1,84 @@
 package tasklist
 
 import kotlinx.datetime.*
+import kotlinx.datetime.Clock.System
 import java.time.LocalTime
 
 fun main() {
-
     do {
-        println("Input an action (add, print, end):")
+        println("Input an action (add, print, edit, delete, end):")
         val option = readLine()
         when(option) {
             "add" -> Interpreter.addNewTask()
-            "print" -> Interpreter.printTaskList()
+            "print" -> TaskList.printList()
+            "edit" -> Interpreter.editTask()
+            "delete" -> Interpreter.deleteTask()
             "end" -> println("Tasklist exiting!")
             else -> println("The input action is invalid")
         }
     } while (option != "end")
 }
 
-object TaskList {
-    val tasks = mutableListOf<Task>()
-}
-
-class Task(val prio:PRIORITY, val deadline:LocalDateTime, val items:MutableList<String>) {
-}
-
 object Interpreter {
-
     fun addNewTask() {
         val prio = getTaskPriority()
         val date = getDate()
         val time = getTime()
-        val dateTime = LocalDateTime(date.year, date.month, date.dayOfMonth, time.hour, time.minute)
         val items = getTaskItems()
-        TaskList.tasks.add(Task(prio, dateTime, items))
+        TaskList.tasks.add(Task(prio, date, time, items))
+    }
+
+    fun editTask() {
+        if(TaskList.tasks.isEmpty())
+            println("No tasks have been input")
+        else {
+            TaskList.printList()
+            val taskToEdit = getTaskToEdit()
+            var fieldToEdit:String? = null
+            while(fieldToEdit == null) {
+                println("Input a field to edit (priority, date, time, task):")
+                fieldToEdit = readLine()
+                when(fieldToEdit) {
+                    "priority" -> taskToEdit.prio = getTaskPriority()
+                    "date" -> taskToEdit.date = getDate()
+                    "time" -> taskToEdit.time = getTime()
+                    "task" -> taskToEdit.items = getTaskItems()
+                    else -> { fieldToEdit = null; print("Invalid field") }
+                }
+            }
+            println("The task is changed")
+        }
+    }
+
+    fun getTaskToEdit():Task {
+        var taskToEdit:Int? = null
+        while(taskToEdit == null) {
+            println("Input the task number (1-${TaskList.tasks.size}):")
+            try {
+                taskToEdit = readLine()!!.toInt()
+                TaskList.tasks[taskToEdit-1]
+            }
+            catch (e:Exception) {  taskToEdit = null; println("Invalid task number") }
+        }
+        return TaskList.tasks[taskToEdit-1]
+    }
+
+    fun deleteTask() {
+        if(TaskList.tasks.isEmpty())
+            println("No tasks have been input")
+        else {
+            TaskList.printList()
+            while(true) {
+                println("Input the task number (1-${TaskList.tasks.size}):")
+                try {
+                    val taskToDelete = readLine()!!.toInt()
+                    TaskList.tasks.removeAt(taskToDelete-1)
+                    println("The task is deleted")
+                    return
+                }
+                catch (e:Exception) { println("Invalid task number") }
+            }
+        }
     }
 
     private fun getTaskPriority(): PRIORITY {
@@ -85,40 +131,60 @@ object Interpreter {
             println("The task is blank")
         return taskItemList
     }
+}
 
-    fun printTaskList() {
-        if(!TaskList.tasks.isEmpty())
-            for(taskIndex in 0 until TaskList.tasks.size) {
-                val task = TaskList.tasks[taskIndex]
+object TaskList {
+    val tasks = mutableListOf<Task>()
+
+    fun printList() {
+        if(!tasks.isEmpty())
+            for(taskIndex in 0 until tasks.size) {
                 val ident = getHeadlineExtraIdentationByIndex(taskIndex)
-                val hourLeadingZero = getHourLeadingZeroByDeadline(task.deadline)
-                val minuteLeadingZero = getMinuteLeadingZeroByDeadline(task.deadline)
-                println("${taskIndex+1} ${ident}${task.deadline.date} $hourLeadingZero${task.deadline.hour}:$minuteLeadingZero${task.deadline.minute} ${task.prio.Id}")
-                for(itemIndex in 0 until TaskList.tasks[taskIndex].items.size)
-                    println("   ${TaskList.tasks[taskIndex].items[itemIndex]}")
+                val task = tasks[taskIndex]
+                println("${taskIndex+1} ${ident}${task}")
+                for(item in task.items)
+                    println("   $item")
                 println()
             }
         else
             println("No tasks have been input")
     }
 
-    private fun getMinuteLeadingZeroByDeadline(deadline:LocalDateTime):String {
+    private fun getHeadlineExtraIdentationByIndex(index:Int): String {
+        if(index < 9)
+            return " "
+        else
+            return ""
+    }
+}
+
+class Task(var prio:PRIORITY, var date: LocalDate, var time:LocalTime, var items:MutableList<String>) {
+    fun getDueTag():String {
+        val remainingDays = System.now().toLocalDateTime(TimeZone.UTC).date.daysUntil(date)
+        if(remainingDays < 0)
+            return "O" // overdue
+        else if(remainingDays == 0)
+            return "T" // today
+        else //(remainingDays > 0)
+            return "I" // in time
+    }
+
+    override fun toString(): String {
+        val hourLeadingZero = getHourLeadingZeroByDeadline(time)
+        val minuteLeadingZero = getMinuteLeadingZeroByDeadline(time)
+        return "$date $hourLeadingZero${time.hour}:$minuteLeadingZero${time.minute} ${prio.Id} ${getDueTag()}"
+    }
+
+    private fun getMinuteLeadingZeroByDeadline(deadline:LocalTime):String {
         if(deadline.minute.toString().length == 1)
             return "0"
         else
             return ""
     }
 
-    private fun getHourLeadingZeroByDeadline(deadline:LocalDateTime):String {
+    private fun getHourLeadingZeroByDeadline(deadline:LocalTime):String {
         if(deadline.hour.toString().length == 1)
             return "0"
-        else
-            return ""
-    }
-
-    private fun getHeadlineExtraIdentationByIndex(index:Int): String {
-        if(index < 9)
-            return " "
         else
             return ""
     }

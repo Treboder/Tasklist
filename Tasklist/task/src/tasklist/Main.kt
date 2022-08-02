@@ -21,11 +21,12 @@ fun main() {
 
 object Interpreter {
     fun addNewTask() {
+        val index = TaskList.tasks.count() + 1
         val prio = getTaskPriority()
         val date = getDate()
         val time = getTime()
         val items = getTaskItems()
-        TaskList.tasks.add(Task(prio, date, time, items))
+        TaskList.tasks.add(Task(index, prio, date, time, items))
     }
 
     fun editTask() {
@@ -74,6 +75,7 @@ object Interpreter {
                     val taskToDelete = readLine()!!.toInt()
                     TaskList.tasks.removeAt(taskToDelete-1)
                     println("The task is deleted")
+                    TaskList.updateTaskIndices()
                     return
                 }
                 catch (e:Exception) { println("Invalid task number") }
@@ -136,37 +138,103 @@ object Interpreter {
 object TaskList {
     val tasks = mutableListOf<Task>()
 
+    fun updateTaskIndices() {
+        for(taskIndex in tasks.indices)
+            tasks[taskIndex].userIndexFrom1 = taskIndex +1
+    }
+
     fun printList() {
-        if(!tasks.isEmpty())
-            for(taskIndex in 0 until tasks.size) {
-                val ident = getHeadlineExtraIdentationByIndex(taskIndex)
-                val task = tasks[taskIndex]
-                println("${taskIndex+1} ${ident}${task}")
-                for(item in task.items)
-                    println("   $item")
-                println()
+        if(!tasks.isEmpty()) {
+            printHeader()
+            for(task in tasks) {
+                printFooter()
+                printTaskAttributes(task)
+                printTaskItems(task)
             }
+            printFooter()
+        }
         else
             println("No tasks have been input")
     }
 
+    private fun printHeader() {
+        println("+----+------------+-------+---+---+--------------------------------------------+\n" +
+                "| N  |    Date    | Time  | P | D |                   Task                     |")
+    }
+
+    private fun printFooter() {
+        println("+----+------------+-------+---+---+--------------------------------------------+")
+    }
+
+    private fun printTaskAttributes(task: Task) {
+        val red = "\u001B[101m \u001B[0m"
+        val green = "\u001B[102m \u001B[0m"
+        val yellow = "\u001B[103m \u001B[0m"
+        val blue = "\u001B[104m \u001B[0m"
+        val indexSpaces = getHeadlineExtraIdentationByIndex(task.userIndexFrom1)
+        print("| ${task.userIndexFrom1}$indexSpaces| ${task.date} | ${task.time} | ${task.prio.ColorSpace} | ${task.getDueTag()} |")
+    }
+
+    private fun printTaskItems(task:Task) {
+        printFirstTaskItem(task.items.first())
+        for(itemIndex in 1 until task.items.size)
+            printFollowingTaskItem(task.items[itemIndex])
+    }
+
+    private fun printFirstTaskItem(item:String) {
+        if(item.length <= 44)
+            println("${splitStringIntoSubstringsWith44Characters(item)[0]}|")
+        else
+            for(line in splitStringIntoSubstringsWith44Characters(item))
+                println("|    |            |       |   |   |$item|")
+    }
+
+    private fun printFollowingTaskItem(item:String) {
+        print("|    |            |       |   |   |")
+        if(item.length <= 44)
+            println("${splitStringIntoSubstringsWith44Characters(item)[0]}|")
+        else
+            for(line in splitStringIntoSubstringsWith44Characters(item))
+                println("|    |            |       |   |   |$item|")
+    }
+
+    private fun splitStringIntoSubstringsWith44Characters(longString:String): MutableList<String> {
+        val lineLength = 43
+        val subStringList = mutableListOf<String>()
+        var requiredSubstrings = longString.length.floorDiv(lineLength)
+        for(round in 0 until requiredSubstrings-1) {
+            val fromIndex = round * lineLength
+            val toIndex = Math.max(fromIndex + lineLength, longString.length)
+            subStringList.add(longString.substring(fromIndex, toIndex))
+        }
+        // no substrings required, string too short
+        if(subStringList.isEmpty())
+            subStringList.add(longString)
+        // fill the last string with spaces until 43 is met
+        while(subStringList.last().length < lineLength)
+            subStringList[subStringList.count()-1] = subStringList.last() + " "
+        return subStringList
+    }
+
     private fun getHeadlineExtraIdentationByIndex(index:Int): String {
-        if(index < 9)
+        if(index <=9)
+            return "  "
+        else if(index <=99)
             return " "
         else
             return ""
     }
 }
 
-class Task(var prio:PRIORITY, var date: LocalDate, var time:LocalTime, var items:MutableList<String>) {
+class Task(var userIndexFrom1:Int, var prio:PRIORITY, var date: LocalDate, var time:LocalTime, var items:MutableList<String>) {
     fun getDueTag():String {
         val remainingDays = System.now().toLocalDateTime(TimeZone.UTC).date.daysUntil(date)
         if(remainingDays < 0)
-            return "O" // overdue
+            return DUETAG.OVERDUE.ColorSpace
         else if(remainingDays == 0)
-            return "T" // today
+            return DUETAG.TODAY.ColorSpace
         else //(remainingDays > 0)
-            return "I" // in time
+            return DUETAG.INTIME.ColorSpace
     }
 
     override fun toString(): String {
@@ -190,9 +258,16 @@ class Task(var prio:PRIORITY, var date: LocalDate, var time:LocalTime, var items
     }
 }
 
-enum class PRIORITY(val Id:String, val Rank:Int) {
-    CRITICAL("C", 0),
-    HIGH("H", 1),
-    NORMAL("N", 2),
-    LOW("L", 3)
+enum class PRIORITY(val Id:String, val ColorSpace:String) {
+    CRITICAL("C", "\u001B[101m \u001B[0m"), // red
+    HIGH("H", "\u001B[103m \u001B[0m"),     // yellow
+    NORMAL("N", "\u001B[102m \u001B[0m"),   // green
+    LOW("L", "\u001B[104m \u001B[0m")       // blue
+}
+
+enum class DUETAG(val Id:String, val ColorSpace:String) {
+    INTIME("I", "\u001B[102m \u001B[0m"),   // green
+    TODAY("T", "\u001B[103m \u001B[0m"),     // yellow
+    OVERDUE("O", "\u001B[101m \u001B[0m"), // red
+
 }

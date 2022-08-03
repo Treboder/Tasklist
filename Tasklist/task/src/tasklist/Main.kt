@@ -177,34 +177,31 @@ object TaskList {
 
     private fun printTaskItems(task:Task) {
         printFirstTaskItem(task.items.first())
-        for(itemIndex in 1 until task.items.size)
-            printFollowingTaskItem(task.items[itemIndex])
+        if(task.items.size >1 )
+            for(itemIndex in 1..task.items.size-1)
+                printFollowingTaskItem(task.items[itemIndex])
     }
 
     private fun printFirstTaskItem(item:String) {
-        if(item.length <= 44)
-            println("${splitStringIntoSubstringsWith44Characters(item)[0]}|")
-        else
-            for(line in splitStringIntoSubstringsWith44Characters(item))
-                println("|    |            |       |   |   |$item|")
+        val splittedString = splitStringIntoSubstringsWith44Characters(item)
+        println("${splittedString.first()}|")
+        for(lineIndex in 1..splittedString.count()-1)
+            println("|    |            |       |   |   |${splittedString[lineIndex]}|")
     }
 
     private fun printFollowingTaskItem(item:String) {
-        print("|    |            |       |   |   |")
-        if(item.length <= 44)
-            println("${splitStringIntoSubstringsWith44Characters(item)[0]}|")
-        else
-            for(line in splitStringIntoSubstringsWith44Characters(item))
-                println("|    |            |       |   |   |$item|")
+        val splittedString = splitStringIntoSubstringsWith44Characters(item)
+        for(line in splittedString)
+            println("|    |            |       |   |   |$line|")
     }
 
     private fun splitStringIntoSubstringsWith44Characters(longString:String): MutableList<String> {
-        val lineLength = 43
+        val lineLength = 44
         val subStringList = mutableListOf<String>()
-        var requiredSubstrings = longString.length.floorDiv(lineLength)
-        for(round in 0 until requiredSubstrings-1) {
+        var requiredSubstrings = Math.ceil(longString.length.toDouble()/lineLength).toInt()
+        for(round in 0..requiredSubstrings-1) {
             val fromIndex = round * lineLength
-            val toIndex = Math.max(fromIndex + lineLength, longString.length)
+            val toIndex = Math.min(fromIndex + lineLength, longString.length)
             subStringList.add(longString.substring(fromIndex, toIndex))
         }
         // no substrings required, string too short

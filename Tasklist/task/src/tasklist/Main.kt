@@ -3,23 +3,27 @@ package tasklist
 import kotlinx.datetime.*
 import kotlinx.datetime.Clock.System
 import java.time.LocalTime
+import com.squareup.moshi.*
+import java.io.File
 
 fun main() {
     do {
+        TaskList.load()
         println("Input an action (add, print, edit, delete, end):")
         val option = readLine()
         when(option) {
-            "add" -> Interpreter.addNewTask()
+            "add" -> TaskEditor.addNewTask()
             "print" -> TaskList.printList()
-            "edit" -> Interpreter.editTask()
-            "delete" -> Interpreter.deleteTask()
-            "end" -> println("Tasklist exiting!")
+            "edit" -> TaskEditor.editTask()
+            "delete" -> TaskEditor.deleteTask()
+            "end" -> TaskList.save()
             else -> println("The input action is invalid")
         }
     } while (option != "end")
+    println("Tasklist exiting!")
 }
 
-object Interpreter {
+object TaskEditor {
     fun addNewTask() {
         val index = TaskList.tasks.count() + 1
         val prio = getTaskPriority()
@@ -51,19 +55,6 @@ object Interpreter {
         }
     }
 
-    fun getTaskToEdit():Task {
-        var taskToEdit:Int? = null
-        while(taskToEdit == null) {
-            println("Input the task number (1-${TaskList.tasks.size}):")
-            try {
-                taskToEdit = readLine()!!.toInt()
-                TaskList.tasks[taskToEdit-1]
-            }
-            catch (e:Exception) {  taskToEdit = null; println("Invalid task number") }
-        }
-        return TaskList.tasks[taskToEdit-1]
-    }
-
     fun deleteTask() {
         if(TaskList.tasks.isEmpty())
             println("No tasks have been input")
@@ -75,12 +66,25 @@ object Interpreter {
                     val taskToDelete = readLine()!!.toInt()
                     TaskList.tasks.removeAt(taskToDelete-1)
                     println("The task is deleted")
-                    TaskList.updateTaskIndices()
+                    TaskList.updateTaskIndicesAfterDelete()
                     return
                 }
                 catch (e:Exception) { println("Invalid task number") }
             }
         }
+    }
+
+    private fun getTaskToEdit():Task {
+        var taskToEdit:Int? = null
+        while(taskToEdit == null) {
+            println("Input the task number (1-${TaskList.tasks.size}):")
+            try {
+                taskToEdit = readLine()!!.toInt()
+                TaskList.tasks[taskToEdit-1]
+            }
+            catch (e:Exception) {  taskToEdit = null; println("Invalid task number") }
+        }
+        return TaskList.tasks[taskToEdit-1]
     }
 
     private fun getTaskPriority(): PRIORITY {
@@ -137,8 +141,29 @@ object Interpreter {
 
 object TaskList {
     val tasks = mutableListOf<Task>()
+    val jsonFile = File("tasklist.json")
 
-    fun updateTaskIndices() {
+    // https://github.com/square/moshi
+
+    @OptIn(ExperimentalStdlibApi::class)
+    fun load() {
+        val moshi: Moshi = Moshi.Builder().build()
+        val jsonAdapter: JsonAdapter<Task> = moshi.adapter<Task>()
+
+        val json = ""
+        val Task = jsonAdapter.fromJson("json")
+        println(json)
+    }
+
+    @OptIn(ExperimentalStdlibApi::class)
+    fun save() {
+        val moshi: Moshi = Moshi.Builder().build()
+        val jsonAdapter: JsonAdapter<TaskList> = moshi.adapter<TaskList>()
+        val json: String = jsonAdapter.toJson(TaskList)
+        println(json)
+    }
+
+    fun updateTaskIndicesAfterDelete() {
         for(taskIndex in tasks.indices)
             tasks[taskIndex].userIndexFrom1 = taskIndex +1
     }
@@ -167,10 +192,6 @@ object TaskList {
     }
 
     private fun printTaskAttributes(task: Task) {
-        val red = "\u001B[101m \u001B[0m"
-        val green = "\u001B[102m \u001B[0m"
-        val yellow = "\u001B[103m \u001B[0m"
-        val blue = "\u001B[104m \u001B[0m"
         val indexSpaces = getHeadlineExtraIdentationByIndex(task.userIndexFrom1)
         print("| ${task.userIndexFrom1}$indexSpaces| ${task.date} | ${task.time} | ${task.prio.ColorSpace} | ${task.getDueTag()} |")
     }
@@ -198,7 +219,7 @@ object TaskList {
     private fun splitStringIntoSubstringsWith44Characters(longString:String): MutableList<String> {
         val lineLength = 44
         val subStringList = mutableListOf<String>()
-        var requiredSubstrings = Math.ceil(longString.length.toDouble()/lineLength).toInt()
+        val requiredSubstrings = Math.ceil(longString.length.toDouble()/lineLength).toInt()
         for(round in 0..requiredSubstrings-1) {
             val fromIndex = round * lineLength
             val toIndex = Math.min(fromIndex + lineLength, longString.length)

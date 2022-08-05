@@ -4,11 +4,12 @@ import kotlinx.datetime.*
 import kotlinx.datetime.Clock.System
 import java.time.LocalTime
 import com.squareup.moshi.*
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.io.File
 
 fun main() {
+    JSONAdapter.load()
     do {
-        TaskList.load()
         println("Input an action (add, print, edit, delete, end):")
         val option = readLine()
         when(option) {
@@ -16,7 +17,7 @@ fun main() {
             "print" -> TaskList.printList()
             "edit" -> TaskEditor.editTask()
             "delete" -> TaskEditor.deleteTask()
-            "end" -> TaskList.save()
+            "end" -> JSONAdapter.save()
             else -> println("The input action is invalid")
         }
     } while (option != "end")
@@ -101,6 +102,16 @@ object TaskEditor {
         }
     }
 
+    public fun getPrioObjectById(id:String):PRIORITY? {
+        when(id) {
+            "C" -> return PRIORITY.CRITICAL
+            "H" -> return PRIORITY.HIGH
+            "N" -> return PRIORITY.NORMAL
+            "L" -> return PRIORITY.LOW
+            else -> return null // println("The input prio is invalid")
+        }
+    }
+
     private fun getDate(): LocalDate {
         while(true) {
             println("Input the date (yyyy-mm-dd):")
@@ -141,31 +152,10 @@ object TaskEditor {
 
 object TaskList {
     val tasks = mutableListOf<Task>()
-    val jsonFile = File("tasklist.json")
-
-    // https://github.com/square/moshi
-
-    @OptIn(ExperimentalStdlibApi::class)
-    fun load() {
-        val moshi: Moshi = Moshi.Builder().build()
-        val jsonAdapter: JsonAdapter<Task> = moshi.adapter<Task>()
-
-        val json = ""
-        val Task = jsonAdapter.fromJson("json")
-        println(json)
-    }
-
-    @OptIn(ExperimentalStdlibApi::class)
-    fun save() {
-        val moshi: Moshi = Moshi.Builder().build()
-        val jsonAdapter: JsonAdapter<TaskList> = moshi.adapter<TaskList>()
-        val json: String = jsonAdapter.toJson(TaskList)
-        println(json)
-    }
 
     fun updateTaskIndicesAfterDelete() {
         for(taskIndex in tasks.indices)
-            tasks[taskIndex].userIndexFrom1 = taskIndex +1
+            tasks[taskIndex].userIndex = taskIndex +1
     }
 
     fun printList() {
@@ -192,8 +182,8 @@ object TaskList {
     }
 
     private fun printTaskAttributes(task: Task) {
-        val indexSpaces = getHeadlineExtraIdentationByIndex(task.userIndexFrom1)
-        print("| ${task.userIndexFrom1}$indexSpaces| ${task.date} | ${task.time} | ${task.prio.ColorSpace} | ${task.getDueTag()} |")
+        val indexSpaces = getHeadlineExtraIdentationByIndex(task.userIndex)
+        print("| ${task.userIndex}$indexSpaces| ${task.date} | ${task.time} | ${task.prio.ColorSpace} | ${task.getDueTag()} |")
     }
 
     private fun printTaskItems(task:Task) {
@@ -244,7 +234,7 @@ object TaskList {
     }
 }
 
-class Task(var userIndexFrom1:Int, var prio:PRIORITY, var date: LocalDate, var time:LocalTime, var items:MutableList<String>) {
+class Task(var userIndex:Int, var prio:PRIORITY, var date: LocalDate, var time:LocalTime, var items:MutableList<String>) {
     fun getDueTag():String {
         val remainingDays = System.now().toLocalDateTime(TimeZone.UTC).date.daysUntil(date)
         if(remainingDays < 0)
@@ -288,4 +278,81 @@ enum class DUETAG(val Id:String, val ColorSpace:String) {
     TODAY("T", "\u001B[103m \u001B[0m"),     // yellow
     OVERDUE("O", "\u001B[101m \u001B[0m"), // red
 
+}
+
+object JSONAdapter {
+    // https://github.com/square/moshi
+    val jsonFile = File("tasklist.json")
+
+    fun readFile():String {
+        val jsonFile = File("tasklist.json")
+        return jsonFile.readText()
+    }
+
+    fun writeFile(content:String) {
+        val jsonFile = File("tasklist.json")
+        jsonFile.writeText(content)
+    }
+
+    fun load() {
+        if(jsonFile.exists())
+        {
+            val moshi: Moshi = Moshi.Builder()
+                .add(KotlinJsonAdapterFactory())
+                .build()
+            val type = Types.newParameterizedType(List::class.java, JSONTask::class.java, LocalDateTime::class.java, LocalDate::class.java)
+            val taskAdapter = moshi.adapter<List<JSONTask?>>(type)
+            val file = readFile()
+            val tasklist = taskAdapter.fromJson(file)
+            for(jsonTask in tasklist!!)
+                TaskList.tasks.add(jsonTask!!.getOriginalTaskObject())
+        }
+    }
+
+    fun save() {
+        val moshi: Moshi = Moshi.Builder()
+            .add(KotlinJsonAdapterFactory())
+            .build()
+        val type = Types.newParameterizedType(List::class.java, JSONTask::class.java, LocalDateTime::class.java, LocalDate::class.java)
+        val taskAdapter = moshi.adapter<List<JSONTask?>>(type)
+        val jsonTasklist = mutableListOf<JSONTask>()
+        for(originalTaskObject in TaskList.tasks)
+            jsonTasklist.add(JSONTask(originalTaskObject))
+        val json: String = taskAdapter.toJson(jsonTasklist)
+        writeFile(json)
+    }
+
+}
+
+class JSONTask() {
+
+    var userIndex:Int? = null
+    var prio:String? = null
+    var date:String? = null
+    var time:String? = null
+    var items:MutableList<String>? = null
+    //var testDate = System.now().toLocalDateTime(TimeZone.UTC).date
+
+    constructor(task: Task): this() {
+        userIndex = task.userIndex
+        prio = task.prio.Id
+        date = task.date.toString()
+        time = task.time.toString()
+        items = task.items
+    }
+
+    fun getOriginalTaskObject():Task {
+        val task = Task(
+            userIndex!!,
+            TaskEditor.getPrioObjectById(prio!!)!!,
+            LocalDate.parse(date!!),
+            LocalTime.parse(time!!),
+            items!!
+        )
+        return task
+    }
+
+    override fun toString(): String {
+        return "$date $time:$time $prio $items}"
+    }
 }
